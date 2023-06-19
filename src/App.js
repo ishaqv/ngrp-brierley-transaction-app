@@ -114,8 +114,6 @@ const App = () => {
                         }
                     },
                 });
-                console.log(enteredPassword + " : " + process.env.REACT_APP_SECRET_KEY);
-
                 if (enteredPassword.trim() === process.env.REACT_APP_SECRET_KEY.trim()) {
                     setPasswordValidated(true);
                 } else {
