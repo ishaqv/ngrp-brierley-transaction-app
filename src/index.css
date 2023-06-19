@@ -14,10 +14,23 @@ code {
     monospace;
 }
 
-.datepicker-input {
-  width: 222px;
-  height: 32px;
+.input {
+  padding: 8px;
+  font-size: 16px;
+  border-radius: 4px;
+  border: 1px solid rgb(204, 204, 204);
 }
+
+td {
+  padding: 5px;
+  whiteSpace: 'nowrap';
+  text-align: left;
+}
+
+
+
+
+
 
 
 

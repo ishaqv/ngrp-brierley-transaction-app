@@ -15,8 +15,6 @@ const App = () => {
     const [loading, setLoading] = useState(false);
     const [passwordValidated, setPasswordValidated] = useState(false);
     const [transactionDate, setTransactionDate] = useState(null);
-    const [transactionDateError] = useState(false);
-
     const handleTransactionDateChange = (date) => {
         setTransactionDate(date);
     };
@@ -161,7 +159,7 @@ const App = () => {
                     <table>
                         <tbody>
                         <tr>
-                            <td style={{ width: '120px' }}>
+                            <td>
                                 <label htmlFor="transactionId">Transaction ID</label>
                             </td>
                             <td>
@@ -170,17 +168,12 @@ const App = () => {
                                     type="text"
                                     value={transactionId}
                                     onChange={(e) => setTransactionId(e.target.value)}
-                                    style={{
-                                        padding: '8px',
-                                        fontSize: '16px',
-                                        borderRadius: '4px',
-                                        border: '1px solid #ccc',
-                                    }}
+                                    className={'input'}
                                 />
                             </td>
                         </tr>
                             <tr>
-                                <td style={{ width: '200px' }}>
+                                <td>
                                     <label htmlFor="transactionDate">Business Period</label>
                                 </td>
                                 <td>
@@ -190,18 +183,16 @@ const App = () => {
                                         onChange={handleTransactionDateChange}
                                         dateFormat="yyyy-MM-dd"
                                         maxDate={new Date()}
-                                        className={`datepicker-input ${transactionDateError ? 'invalid' : ''}`}
+                                        className={'input'}
                                         inputProps={{readOnly: true}}
-                                        onFocus={e => e.target.blur()}
-
+                                        onFocus={event => event.target.blur()}
                                     />
 
                                 </td>
                             </tr>
-
-                        <tr style={{ height: '70px' }}>
+                        <tr>
                             <td></td>
-                            <td align={'center'}>
+                            <td style={{ textAlign: 'center' }}>
                                 {loading ? (
                                     <img
                                         src={loadingSpinner}
