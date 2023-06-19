@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import axios from 'axios';
-import { saveAs } from 'file-saver';
-import { toast, ToastContainer } from 'react-toastify';
+import {saveAs} from 'file-saver';
+import {toast, ToastContainer} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import loadingSpinner from './loading_spinner.gif';
 import 'sweetalert2/dist/sweetalert2.min.css';
@@ -35,40 +35,40 @@ const App = () => {
             const selectedDate = moment(transactionDate);
             const beforeDate = selectedDate.clone().subtract(1, 'day').format('YYYY-MM-DD');
             const afterDate = selectedDate.clone().add(1, 'day').format('YYYY-MM-DD');
-
             const timeframe = `(timestamp > todatetime("${beforeDate}") and timestamp < todatetime("${afterDate}"))`;
             const data = {
                 query:
                     `let relevant_traces = traces | where (cloud_RoleName == "brierley_service" or cloud_RoleName endswith "brierley-transaction-azfunctionapp")
                         and ${timeframe}
-                        and message has "-${transactionId}-";
+                        and message has "-${transactionId}-"
+                        and message has "-${selectedDate.format('YYYY-MM-DD')}";
                         let transaction_request = relevant_traces
                         | where message has "Transaction Request"
-                        | extend request = split(message, "Transaction Request: ")[1] 
+                        | extend request = split(message, "Transaction Request: ")[1]
                         | project request, operation_Id, timestamp;
                         let evaluate_discount_request = relevant_traces
                         | where message has "Evaluate Discounts Request: "
-                        | extend request = split(message, "Evaluate Discounts Request: ")[1] 
+                        | extend request = split(message, "Evaluate Discounts Request: ")[1]
                         | project request, operation_Id, timestamp;
                         let transaction_response = relevant_traces
-                        | where message has "Transaction post success. Response -" 
-                        | extend response = split(message, "Transaction post success. Response - ")[1] 
+                        | where message has "Transaction post success. Response -"
+                        | extend response = split(message, "Transaction post success. Response - ")[1]
                         | project response, operation_Id;
                         let evaluate_discount_response = relevant_traces
-                        | where message has "Evaluate Discounts Search success. Response - " 
-                        | extend response = split(message, "Evaluate Discounts Search success. Response - ")[1] 
+                        | where message has "Evaluate Discounts Search success. Response - "
+                        | extend response = split(message, "Evaluate Discounts Search success. Response - ")[1]
                         | project response, operation_Id;
-                        let transaction_payloads = transaction_request 
-                        | join kind=inner transaction_response on operation_Id 
-                        | extend transaction_payload = bag_pack("request", request, "response", response) 
+                        let transaction_payloads = transaction_request
+                        | join kind=inner transaction_response on operation_Id
+                        | extend transaction_payload = bag_pack("request", request, "response", response)
                         | project transaction_payload, timestamp;
-                        let evaluate_discount_payloads = evaluate_discount_request 
-                        | join kind=inner evaluate_discount_response on operation_Id 
-                        | extend evaluate_discount_payload = bag_pack("request", request, "response", response) 
+                        let evaluate_discount_payloads = evaluate_discount_request
+                        | join kind=inner evaluate_discount_response on operation_Id
+                        | extend evaluate_discount_payload = bag_pack("request", request, "response", response)
                         | project evaluate_discount_payload, timestamp;
                         union transaction_payloads, evaluate_discount_payloads
                         | extend payload = bag_pack("timestamp[UTC]", timestamp, "transaction", transaction_payload, "evaluate_discount", evaluate_discount_payload)
-                        | order by timestamp asc nulls last  
+                        | order by timestamp asc nulls last
                         | project payload`.replace(/\\\\\\/g, '')
             };
             const response = await axios.post(
@@ -82,7 +82,7 @@ const App = () => {
                 }
             );
             if (response.data['tables'][0].rows.length === 0) {
-                callToast('The data you requested was not found in our records.');
+                callToast('The data you requested was not found in our records');
                 return;
             }
             const formattedResponse = JSON.stringify(response.data['tables'][0].rows, null, 2);
