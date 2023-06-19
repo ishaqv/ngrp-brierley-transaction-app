@@ -8,7 +8,7 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 import Swal from 'sweetalert2';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-
+import moment from 'moment';
 
 const App = () => {
     const [transactionId, setTransactionId] = useState('');
@@ -27,17 +27,49 @@ const App = () => {
             return;
         }
         if (!transactionDate) {
-            callToast('Please choose a transaction date');
+            callToast('Please choose a business period');
             return;
         }
         setLoading(true);
         try {
-            const timeframe = 'timestamp >= ago(30d)';
+            const selectedDate = moment(transactionDate);
+            const beforeDate = selectedDate.clone().subtract(1, 'day').format('YYYY-MM-DD');
+            const afterDate = selectedDate.clone().add(1, 'day').format('YYYY-MM-DD');
+
+            const timeframe = `(timestamp > todatetime("${beforeDate}") and timestamp < todatetime("${afterDate}"))`;
             const data = {
-                query: `let requests = traces | where message has "Transaction Request" and message has "${transactionId}" and ${timeframe} | extend request = split(message, "Transaction Request: ")[1] | project request, operation_Id; let responses = traces | where message has "Transaction post success. Response -" and message has "${transactionId}" and ${timeframe} | extend response = split(message, "Transaction post success. Response - ")[1] | project response, operation_Id; requests | join kind=inner responses on operation_Id | extend payload = bag_pack("request", request, "response", response) | project payload`.replace(
-                    /\\\\\\/g,
-                    ''
-                ),
+                query:
+                    `let relevant_traces = traces | where (cloud_RoleName == "brierley_service" or cloud_RoleName endswith "brierley-transaction-azfunctionapp")
+                        and ${timeframe}
+                        and message has "-${transactionId}-";
+                        let transaction_request = relevant_traces
+                        | where message has "Transaction Request"
+                        | extend request = split(message, "Transaction Request: ")[1] 
+                        | project request, operation_Id, timestamp;
+                        let evaluate_discount_request = relevant_traces
+                        | where message has "Evaluate Discounts Request: "
+                        | extend request = split(message, "Evaluate Discounts Request: ")[1] 
+                        | project request, operation_Id, timestamp;
+                        let transaction_response = relevant_traces
+                        | where message has "Transaction post success. Response -" 
+                        | extend response = split(message, "Transaction post success. Response - ")[1] 
+                        | project response, operation_Id;
+                        let evaluate_discount_response = relevant_traces
+                        | where message has "Evaluate Discounts Search success. Response - " 
+                        | extend response = split(message, "Evaluate Discounts Search success. Response - ")[1] 
+                        | project response, operation_Id;
+                        let transaction_payloads = transaction_request 
+                        | join kind=inner transaction_response on operation_Id 
+                        | extend transaction_payload = bag_pack("request", request, "response", response) 
+                        | project transaction_payload, timestamp;
+                        let evaluate_discount_payloads = evaluate_discount_request 
+                        | join kind=inner evaluate_discount_response on operation_Id 
+                        | extend evaluate_discount_payload = bag_pack("request", request, "response", response) 
+                        | project evaluate_discount_payload, timestamp;
+                        union transaction_payloads, evaluate_discount_payloads
+                        | extend payload = bag_pack("timestamp[UTC]", timestamp, "transaction", transaction_payload, "evaluate_discount", evaluate_discount_payload)
+                        | order by timestamp asc nulls last  
+                        | project payload`.replace(/\\\\\\/g, '')
             };
             const response = await axios.post(
                 `${process.env.REACT_APP_APP_INSIGHTS_API_BASE_URL}/v1/apps/${process.env.REACT_APP_APP_INSIGHTS_APPLICATION_ID}/query`,
@@ -50,18 +82,15 @@ const App = () => {
                 }
             );
             if (response.data['tables'][0].rows.length === 0) {
-                callToast('Transaction data not found');
+                callToast('The data you requested was not found in our records.');
                 return;
             }
-            const formattedResponse = JSON.stringify(
-                JSON.parse(response.data['tables'][0].rows[0][0]),
-                null,
-                2
-            );
+            const formattedResponse = JSON.stringify(response.data['tables'][0].rows, null, 2);
             const fileBlob = new Blob([formattedResponse], { type: 'application/json' });
-            saveAs(fileBlob, `transaction_payload_${transactionId}.json`);
+            saveAs(fileBlob, `brierley_transaction_payload_${transactionId}.json`);
         } catch (error) {
-            callToast('Error occurred while retrieving transaction payload');
+            console.error(error);
+            callToast('An error occurred while retrieving data');
         } finally {
             setLoading(false);
         }
@@ -153,7 +182,7 @@ const App = () => {
                         </tr>
                             <tr>
                                 <td style={{ width: '200px' }}>
-                                    <label htmlFor="transactionDate">Transaction Date</label>
+                                    <label htmlFor="transactionDate">Business Period</label>
                                 </td>
                                 <td>
                                     <DatePicker
