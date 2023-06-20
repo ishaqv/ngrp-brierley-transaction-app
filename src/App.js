@@ -19,6 +19,42 @@ const App = () => {
         setTransactionDate(date);
     };
 
+    function generatePayload(rows) {
+        const output = {
+            timestamp_utc: '',
+            transaction: [],
+            evaluate_discounts: []
+        };
+        rows.forEach((row) => {
+            output.timestamp_utc = row[0];
+            const message = row[1];
+            if (message.includes('Evaluate Discounts Request')) {
+                const evaluateDiscountRequestData = message.substring(message.indexOf('{'));
+                const parsedJson = JSON.parse(evaluateDiscountRequestData);
+                output.evaluate_discounts.push({
+                    request: parsedJson
+                });
+            } else if (message.includes('Evaluate Discounts Search success')) {
+                const evaluateDiscountResponseData = message.substring(message.indexOf('{'));
+                const parsedJson = JSON.parse(evaluateDiscountResponseData);
+                const lastIndex = output.evaluate_discounts.length - 1;
+                output.evaluate_discounts[lastIndex].response = parsedJson;
+            } else if (message.includes('Transaction Request')) {
+                const transactionRequestData = message.substring(message.indexOf('{'));
+                const parsedJson = JSON.parse(transactionRequestData);
+                output.transaction.push({
+                    request: parsedJson
+                });
+            } else if (message.includes('Transaction post success')) {
+                const transactionResponseData = message.substring(message.indexOf('{'));
+                const parsedJson = JSON.parse(transactionResponseData);
+                const lastIndex = output.transaction.length - 1;
+                output.transaction[lastIndex].response = parsedJson;
+            }
+        });
+        return JSON.stringify(output, null, 2);
+    }
+
     const handleDownload = async () => {
         if (transactionId.trim() === '') {
             callToast('Please enter a transaction ID');
@@ -35,39 +71,16 @@ const App = () => {
             const afterDate = selectedDate.clone().add(1, 'day').format('YYYY-MM-DD');
             const timeframe = `(timestamp > todatetime("${beforeDate}") and timestamp < todatetime("${afterDate}"))`;
             const data = {
-                query:
-                    `let relevant_traces = traces | where (cloud_RoleName == "brierley_service" or cloud_RoleName endswith "brierley-transaction-azfunctionapp")
+                query: `let relevant_traces = traces | where (cloud_RoleName == "brierley_service" or cloud_RoleName endswith "brierley-transaction-azfunctionapp")
                         and ${timeframe}
                         and message has "-${transactionId}-"
                         and message has "-${selectedDate.format('YYYY-MM-DD')}";
-                        let transaction_request = relevant_traces
-                        | where message has "Transaction Request"
-                        | extend request = split(message, "Transaction Request: ")[1]
-                        | project request, operation_Id, timestamp;
-                        let evaluate_discount_request = relevant_traces
+                        relevant_traces
                         | where message has "Evaluate Discounts Request: "
-                        | extend request = split(message, "Evaluate Discounts Request: ")[1]
-                        | project request, operation_Id, timestamp;
-                        let transaction_response = relevant_traces
-                        | where message has "Transaction post success. Response -"
-                        | extend response = split(message, "Transaction post success. Response - ")[1]
-                        | project response, operation_Id;
-                        let evaluate_discount_response = relevant_traces
-                        | where message has "Evaluate Discounts Search success. Response - "
-                        | extend response = split(message, "Evaluate Discounts Search success. Response - ")[1]
-                        | project response, operation_Id;
-                        let transaction_payloads = transaction_request
-                        | join kind=inner transaction_response on operation_Id
-                        | extend transaction_payload = bag_pack("request", request, "response", response)
-                        | project transaction_payload, timestamp;
-                        let evaluate_discount_payloads = evaluate_discount_request
-                        | join kind=inner evaluate_discount_response on operation_Id
-                        | extend evaluate_discount_payload = bag_pack("request", request, "response", response)
-                        | project evaluate_discount_payload, timestamp;
-                        union transaction_payloads, evaluate_discount_payloads
-                        | extend payload = bag_pack("timestamp[UTC]", timestamp, "transaction", transaction_payload, "evaluate_discount", evaluate_discount_payload)
-                        | order by timestamp asc nulls last
-                        | project payload`.replace(/\\\\\\/g, '')
+                            or message has "Evaluate Discounts Search success. Response - "
+                            or message has "Transaction Request"
+                            or message has "Transaction post success. Response -" 
+                        | project timestamp, message`.replace(/\\\\\\/g, '')
             };
             const response = await axios.post(
                 `${process.env.REACT_APP_APP_INSIGHTS_API_BASE_URL}/v1/apps/${process.env.REACT_APP_APP_INSIGHTS_APPLICATION_ID}/query`,
@@ -83,12 +96,12 @@ const App = () => {
                 callToast('The data you requested was not found in our records');
                 return;
             }
-            const formattedResponse = JSON.stringify(response.data['tables'][0].rows, null, 2);
-            const fileBlob = new Blob([formattedResponse], { type: 'application/json' });
+            const payload = generatePayload(response.data['tables'][0].rows);
+            const fileBlob = new Blob([payload], { type: 'application/json' });
             saveAs(fileBlob, `brierley_transaction_payload_${transactionId}.json`);
         } catch (error) {
             console.error(error);
-            callToast('An error occurred while retrieving data');
+            callToast('An error occurred while processing data');
         } finally {
             setLoading(false);
         }
@@ -105,7 +118,7 @@ const App = () => {
                         autocorrect: 'off',
                     },
                     showCancelButton: false,
-                    confirmButtonText: 'Submit',
+                    confirmButtonText: 'Unlock',
                     inputValidator: (value) => {
                         if (!value) {
                             return 'Please enter the secret key';
