@@ -8,6 +8,7 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 import Swal from 'sweetalert2';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { format } from 'date-fns'
 
 const App = () => {
     const [transactionId, setTransactionId] = useState('');
@@ -60,15 +61,24 @@ const App = () => {
             return;
         }
         if (!transactionDate) {
-            callToast('Please choose a business period');
+            callToast('Please choose a transaction date');
             return;
         }
         setLoading(true);
         try {
-            const response = await axios.post('http://localhost:3001/api/download', {
-                transactionId: transactionId,
-                transactionDate: transactionDate,
-            });
+            const response = await axios.post(
+                `${process.env.REACT_APP_API_URL}/api/payload/download`,
+                {
+                    transactionId: transactionId,
+                    transactionDate: format(transactionDate, 'yyyy-MM-dd'),
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
             if (response.data && response.data['tables'][0].rows.length === 0) {
                 callToast('The data you requested was not found in our records');
                 return;
@@ -103,7 +113,8 @@ const App = () => {
                     },
                 });
 
-                const response = await axios.post('http://localhost:3001/api/authorize', {
+                const response = await axios.post(
+                    `${process.env.REACT_APP_API_URL}/api/payload/authorize`, {
                     password: enteredPassword
                 });
                 if (response.data.isValid) {
@@ -169,7 +180,7 @@ const App = () => {
                         </tr>
                             <tr>
                                 <td>
-                                    <label htmlFor="transactionDate">Business Period</label>
+                                    <label htmlFor="transactionDate">Transaction Date</label>
                                 </td>
                                 <td>
                                     <DatePicker
