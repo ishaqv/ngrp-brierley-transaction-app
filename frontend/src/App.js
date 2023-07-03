@@ -8,7 +8,6 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 import Swal from 'sweetalert2';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import moment from 'moment';
 
 const App = () => {
     const [transactionId, setTransactionId] = useState('');
@@ -66,33 +65,11 @@ const App = () => {
         }
         setLoading(true);
         try {
-            const selectedDate = moment(transactionDate);
-            const beforeDate = selectedDate.clone().subtract(1, 'day').format('YYYY-MM-DD');
-            const afterDate = selectedDate.clone().add(1, 'day').format('YYYY-MM-DD');
-            const timeframe = `(timestamp > todatetime("${beforeDate}") and timestamp < todatetime("${afterDate}"))`;
-            const data = {
-                query: `let relevant_traces = traces | where (cloud_RoleName == "brierley_service" or cloud_RoleName endswith "brierley-transaction-azfunctionapp")
-                        and ${timeframe}
-                        and message has "-${transactionId}-"
-                        and message has "-${selectedDate.format('YYYY-MM-DD')}";
-                        relevant_traces
-                        | where message has "Evaluate Discounts Request: "
-                            or message has "Evaluate Discounts Search success. Response - "
-                            or message has "Transaction Request"
-                            or message has "Transaction post success. Response -" 
-                        | project timestamp, message`.replace(/\\\\\\/g, '')
-            };
-            const response = await axios.post(
-                `${process.env.REACT_APP_APP_INSIGHTS_API_BASE_URL}/v1/apps/${process.env.REACT_APP_APP_INSIGHTS_APPLICATION_ID}/query`,
-                data,
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': process.env.REACT_APP_APP_INSIGHTS_API_KEY,
-                    },
-                }
-            );
-            if (response.data['tables'][0].rows.length === 0) {
+            const response = await axios.post('http://localhost:3001/api/download', {
+                transactionId: transactionId,
+                transactionDate: transactionDate,
+            });
+            if (response.data && response.data['tables'][0].rows.length === 0) {
                 callToast('The data you requested was not found in our records');
                 return;
             }
@@ -125,9 +102,14 @@ const App = () => {
                         }
                     },
                 });
-                if (enteredPassword.trim() === process.env.REACT_APP_SECRET_KEY.trim()) {
+
+                const response = await axios.post('http://localhost:3001/api/authorize', {
+                    password: enteredPassword
+                });
+                if (response.data.isValid) {
                     setPasswordValidated(true);
-                } else {
+                }
+                else {
                     await Swal.fire({
                         icon: 'error',
                         title: 'Incorrect secret',
